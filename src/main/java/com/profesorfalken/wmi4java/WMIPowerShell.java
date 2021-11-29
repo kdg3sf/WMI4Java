@@ -109,13 +109,13 @@ class WMIPowerShell implements WMIStub {
 
         command += " | ";
 
-        command += "Select-Object " + WMI4JavaUtil.join(", ", usedWMIProperties) + " -excludeproperty \"_*\" | ";
-
         if (conditions != null && !conditions.isEmpty()) {
             for (String condition : conditions) {
                 command += "Where-Object -FilterScript {" + condition + "} | ";
             }
         }
+
+        command += "Select-Object " + WMI4JavaUtil.join(", ", usedWMIProperties) + " -excludeproperty \"_*\" | ";
 
         command += "Format-List *";
 
