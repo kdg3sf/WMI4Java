@@ -281,9 +281,13 @@ public class WMI4Java {
 
 			for (final String line : dataStringLines) {
 				if (!line.isEmpty()) {
-					String[] entry = line.split(":");
-					if (entry != null && entry.length == 2) {
-						foundWMIClassProperties.put(entry[0].trim(), entry[1].trim());
+					int p = line.indexOf(':');
+					if (p > 0) {
+						String property = line.substring(0, p).trim();
+						String value = line.substring(p + 1).trim();
+						if (!property.isEmpty()) {
+							foundWMIClassProperties.put(property, value);
+						}
 					}
 				}
 			}
@@ -341,9 +345,13 @@ public class WMI4Java {
 				Map<String, String> objectProperties = new HashMap<String, String>();
 				for (final String line : dataStringLines) {
 					if (!line.isEmpty()) {
-						String[] entry = line.split(":");
-						if (entry.length == 2) {
-							objectProperties.put(entry[0].trim(), entry[1].trim());
+						int p = line.indexOf(':');
+						if (p > 0) {
+							String property = line.substring(0, p).trim();
+							String value = line.substring(p + 1).trim();
+							if (!property.isEmpty()) {
+								objectProperties.put(property, value);
+							}
 						}
 					}
 				}
