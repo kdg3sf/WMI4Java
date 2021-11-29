@@ -23,7 +23,10 @@ import java.util.List;
  * 
  * @author Javier Garcia Alonso
  */
-interface WMIStub {
+interface WMIStub extends AutoCloseable {
+
+    @Override
+    abstract void close() throws WMIException;
 
     /**
      * List all the WMI classes for the required namespace/computername

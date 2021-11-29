@@ -35,32 +35,40 @@ class WMIPowerShell implements WMIStub {
     private static final String COMPUTERNAME_PARAM = "-ComputerName ";
     private static final String GETWMIOBJECT_COMMAND = "Get-WMIObject ";
 
-    private static String executeCommand(String command) throws WMIException {
-        String commandResponse = null;
-        PowerShell powerShell = null;
+    private final PowerShell powerShell;
+
+    private WMIPowerShell() {
+        Map<String, String> config = new HashMap<>();
+        config.put("maxWait", "20000");
+        powerShell = PowerShell.openSession().configuration(config);
+    }
+
+    static WMIStub openSession() {
         try {
-            powerShell = PowerShell.openSession();
-            Map<String, String> config = new HashMap<String, String>();
-            config.put("maxWait", "20000");
-            PowerShellResponse psResponse = powerShell.configuration(config).executeCommand(command);
+            return new WMIPowerShell();
+        } catch (PowerShellNotAvailableException ex) {
+            throw new WMIException(ex.getMessage(), ex);
+        }
+    }
+
+    @Override
+    public void close() {
+        powerShell.close();
+    }
+
+    private String executeCommand(String command) throws WMIException {
+        try {
+            PowerShellResponse psResponse = powerShell.executeCommand(command);
 
             if (psResponse.isError()) {
                 throw new WMIException("WMI operation finished in error: "
                         + psResponse.getCommandOutput());
             }
 
-            commandResponse = psResponse.getCommandOutput().trim();
-
-            powerShell.close();
+            return psResponse.getCommandOutput().trim();
         } catch (PowerShellNotAvailableException ex) {
             throw new WMIException(ex.getMessage(), ex);
-        } finally {
-            if (powerShell != null) {
-                powerShell.close();
-            }
         }
-
-        return commandResponse;
     }
 
     public String listClasses(String namespace, String computerName) throws WMIException {

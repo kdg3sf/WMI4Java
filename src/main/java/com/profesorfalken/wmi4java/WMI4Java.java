@@ -17,7 +17,6 @@ package com.profesorfalken.wmi4java;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -74,15 +73,6 @@ public class WMI4Java {
 	private WMI4Java() {
 	}
 
-	// Get the engine used to retrieve WMI data
-	private WMIStub getWMIStub() {
-		if (this.forceVBEngine) {
-			return new WMIVBScript();
-		} else {
-			return new WMIPowerShell();
-		}
-	}
-
 	/**
 	 * Static creation of instance
 	 *
@@ -93,7 +83,7 @@ public class WMI4Java {
 	}
 
 	/**
-	 * Set an specific namespace <br>
+	 * Set a specific namespace <br>
 	 *
 	 * By default it uses root/cimv2 namespace
 	 *
@@ -107,11 +97,11 @@ public class WMI4Java {
 	}
 
 	/**
-	 * Set an specific computer name <br>
+	 * Set a specific computer name <br>
 	 *
-	 * By default it uses .
+	 * By default it uses "."
 	 *
-	 * @param computerName
+	 * @param computerName name of computer to query; "." for this one
 	 * @return object instance used to chain calls
 	 */
 	public WMI4Java computerName(String computerName) {
@@ -164,185 +154,244 @@ public class WMI4Java {
 	}
 
 	/**
-	 * Query and list the WMI classes
+	 * Open a connection to the underlying WMI provider (VBSEngine or PowerShell), with which you can perform
+	 * one or more WMI operations. Be sure to close the connection when done, with a try-with-resources auto-close
+	 * or an explicit call to {@link WMIConnection#close()}.
 	 *
-	 * @see <a href=
-	 *      "https://msdn.microsoft.com/fr-fr/library/windows/desktop/aa394554(v=vs.85).aspx">WMI
-	 *      Classes - MSDN</a>
-	 * @return a list with the name of existing classes in the system
+	 * @return a {@link WMIConnection} to the currently-selected provider
+	 */
+	public WMIConnection openConnection() {
+		return new WMIConnection();
+	}
+
+	/**
+	 * Single-operation version of {@link WMIConnection#listClasses()}.
+	 * <p/>
+	 * When performing more than one operation, for better performance, use {@link #openConnection()}
+	 * to get a {@link WMIConnection}, perform each operation, then call {@link WMIConnection#close()}.
 	 */
 	public List<String> listClasses() throws WMIException {
-		List<String> wmiClasses = new ArrayList<String>();
-		String rawData;
-		try {
-			rawData = getWMIStub().listClasses(this.namespace, this.computerName);
-
-			String[] dataStringLines = rawData.split(NEWLINE_REGEX);
-
-			for (String line : dataStringLines) {
-				if (!line.isEmpty() && !line.startsWith("_")) {
-					String[] infos = line.split(SPACE_REGEX);
-					wmiClasses.addAll(Arrays.asList(infos));
-				}
-			}
-
-			// Normalize results: remove duplicates and sort the list
-			Set<String> hs = new HashSet<String>();
-			hs.addAll(wmiClasses);
-			wmiClasses.clear();
-			wmiClasses.addAll(hs);
-
-		} catch (Exception ex) {
-			Logger.getLogger(WMI4Java.class.getName()).log(Level.SEVERE, GENERIC_ERROR_MSG, ex);
-			throw new WMIException(ex);
+		try (WMIConnection connection = openConnection()) {
+			return connection.listClasses();
 		}
-
-		return wmiClasses;
 	}
 
 	/**
-	 * Query a WMI class and return all the available properties
-	 *
-	 * @param wmiClass
-	 *            the WMI class to query
-	 * @return a list with the name of existing properties in the class
+	 * Single-operation version of {@link WMIConnection#listProperties(String)}.
+	 * <p/>
+	 * When performing more than one operation, for better performance, use {@link #openConnection()}
+	 * to get a {@link WMIConnection}, perform each operation, then call {@link WMIConnection#close()}.
 	 */
 	public List<String> listProperties(String wmiClass) throws WMIException {
-		List<String> foundPropertiesList = new ArrayList<String>();
-		try {
-			String rawData = getWMIStub().listProperties(wmiClass, this.namespace, this.computerName);
-
-			String[] dataStringLines = rawData.split(NEWLINE_REGEX);
-
-			for (final String line : dataStringLines) {
-				if (!line.isEmpty()) {
-					foundPropertiesList.add(line.trim());
-				}
-			}
-
-			List<String> notAllowed = Arrays.asList(new String[] { "Equals", "GetHashCode", "GetType", "ToString" });
-			foundPropertiesList.removeAll(notAllowed);
-
-		} catch (Exception ex) {
-			Logger.getLogger(WMI4Java.class.getName()).log(Level.SEVERE, GENERIC_ERROR_MSG, ex);
-			throw new WMIException(ex);
+		try (WMIConnection connection = openConnection()) {
+			return connection.listProperties(wmiClass);
 		}
-		return foundPropertiesList;
 	}
 
 	/**
-	 * Query all the object data for an specific class <br>
-	 * 
-	 * <b>WARNINGN</b> Notice that this method return a flat object. That means
-	 * that if you need to retrieve a list of objects it will not work as
-	 * expected. Every time it find an existing object key it overrides it.
-	 * <p>
-	 * 
-	 * In order to retrieve a list of objects, use instead
-	 * {@link #getWMIObjectList(WMIClass)}
-	 *
-	 * @param wmiClass
-	 *            Enum that contains the most used classes (root/cimv2)
-	 * @return map with the key and the value of all the properties of the
-	 *         object
+	 * Single-operation version of {@link WMIConnection#getWMIObject(WMIClass)}.
+	 * <p/>
+	 * When performing more than one operation, for better performance, use {@link #openConnection()}
+	 * to get a {@link WMIConnection}, perform each operation, then call {@link WMIConnection#close()}.
 	 */
-	public Map<String, String> getWMIObject(WMIClass wmiClass) {
-		return getWMIObject(wmiClass.getName());
+	public Map<String, String> getWMIObject(WMIClass wmiClass) throws WMIException {
+		try (WMIConnection connection = openConnection()) {
+			return connection.getWMIObject(wmiClass);
+		}
 	}
 
 	/**
-	 * Query all the object data for an specific class <br>
-	 * 
-	 * <b>WARNINGN</b> Notice that this method return a flat object. That means
-	 * that if you need to retrieve a list of objects it will not work as
-	 * expected. Every time it find an existing object key it overrides it.
-	 * <p>
-	 * 
-	 * In order to retrieve a list of objects, use instead
-	 * {@link #getWMIObjectList(String)}
-	 *
-	 * @param wmiClass
-	 *            Enum that contains the most used classes (root/cimv2)
-	 * @return map with the key and the value of all the properties of the
-	 *         object
+	 * Single-operation version of {@link WMIConnection#getWMIObject(String)}.
+	 * <p/>
+	 * When performing more than one operation, for better performance, use {@link #openConnection()}
+	 * to get a {@link WMIConnection}, perform each operation, then call {@link WMIConnection#close()}.
 	 */
 	public Map<String, String> getWMIObject(String wmiClass) throws WMIException {
-		Map<String, String> foundWMIClassProperties = new HashMap<String, String>();
-		try {
-			String rawData;
-			if (this.properties != null || this.filters != null) {
-				rawData = getWMIStub().queryObject(wmiClass, this.properties, this.filters, this.namespace,
-						this.computerName);
-			} else {
-				rawData = getWMIStub().listObject(wmiClass, this.namespace, this.computerName);
-			}
-
-			String[] dataStringLines = rawData.split(NEWLINE_REGEX);
-
-			for (final String line : dataStringLines) {
-				if (!line.isEmpty()) {
-					int p = line.indexOf(':');
-					if (p > 0) {
-						String property = line.substring(0, p).trim();
-						String value = line.substring(p + 1).trim();
-						if (!property.isEmpty()) {
-							foundWMIClassProperties.put(property, value);
-						}
-					}
-				}
-			}
-		} catch (WMIException ex) {
-			Logger.getLogger(WMI4Java.class.getName()).log(Level.SEVERE, GENERIC_ERROR_MSG, ex);
-			throw new WMIException(ex);
+		try (WMIConnection connection = openConnection()) {
+			return connection.getWMIObject(wmiClass);
 		}
-		return foundWMIClassProperties;
 	}
 
 	/**
-	 * Query a list of object data for an specific class <br>
-	 * 
-	 * This method should be used to retrieve a list of objects instead of a
-	 * flat key/value object. <br>
-	 * For example, you can use it to retrieve hardware elements information
-	 * (processors, printers, screens, etc)
-	 *
-	 * @param wmiClass
-	 *            Enum that contains the most used classes (root/cimv2)
-	 * @return List of key/value elements. Each element in the list is a found
-	 *         object
+	 * Single-operation version of {@link WMIConnection#getWMIObjectList(WMIClass)}.
+	 * <p/>
+	 * When performing more than one operation, for better performance, use {@link #openConnection()}
+	 * to get a {@link WMIConnection}, perform each operation, then call {@link WMIConnection#close()}.
 	 */
-	public List<Map<String, String>> getWMIObjectList(WMIClass wmiClass) {
-		return getWMIObjectList(wmiClass.getName());
+	public List<Map<String, String>> getWMIObjectList(WMIClass wmiClass) throws WMIException {
+		try (WMIConnection connection = openConnection()) {
+			return connection.getWMIObjectList(wmiClass);
+		}
 	}
 
 	/**
-	 * Query a list of object data for an specific class <br>
-	 * 
-	 * This method should be used to retrieve a list of objects instead of a
-	 * flat key/value object. <br>
-	 * For example, you can use it to retrieve hardware elements information
-	 * (processors, printers, screens, etc)
-	 *
-	 * @param wmiClass
-	 *            Enum that contains the most used classes (root/cimv2)
-	 * @return List of key/value elements. Each element in the list is a found
-	 *         object
+	 * Single-operation version of {@link WMIConnection#getWMIObjectList(String)}.
+	 * <p/>
+	 * When performing more than one operation, for better performance, use {@link #openConnection()}
+	 * to get a {@link WMIConnection}, perform each operation, then call {@link WMIConnection#close()}.
 	 */
 	public List<Map<String, String>> getWMIObjectList(String wmiClass) throws WMIException {
-		List<Map<String, String>> foundWMIClassProperties = new ArrayList<Map<String, String>>();
-		try {
-			String rawData;
-			if (this.properties != null || this.filters != null) {
-				rawData = getWMIStub().queryObject(wmiClass, this.properties, this.filters, this.namespace,
-						this.computerName);
+		try (WMIConnection connection = openConnection()) {
+			return connection.getWMIObjectList(wmiClass);
+		}
+	}
+
+	/**
+	 * Single-operation version of {@link WMIConnection#getRawWMIObjectOutput(WMIClass)}.
+	 * <p/>
+	 * When performing more than one operation, for better performance, use {@link #openConnection()}
+	 * to get a {@link WMIConnection}, perform each operation, then call {@link WMIConnection#close()}.
+	 */
+	public String getRawWMIObjectOutput(WMIClass wmiClass) throws WMIException {
+		try (WMIConnection connection = openConnection()) {
+			return connection.getRawWMIObjectOutput(wmiClass);
+		}
+	}
+
+	/**
+	 * Single-operation version of {@link WMIConnection#getRawWMIObjectOutput(String)}.
+	 * <p/>
+	 * When performing more than one operation, for better performance, use {@link #openConnection()}
+	 * to get a {@link WMIConnection}, perform each operation, then call {@link WMIConnection#close()}.
+	 */
+	public String getRawWMIObjectOutput(String wmiClass) throws WMIException {
+		try (WMIConnection connection = openConnection()) {
+			return connection.getRawWMIObjectOutput(wmiClass);
+		}
+	}
+
+	public class WMIConnection implements AutoCloseable {
+
+		private final WMIStub wmiStub;
+
+		private WMIConnection() {
+			// Get the engine used to retrieve WMI data
+			if (forceVBEngine) {
+				wmiStub = WMIVBScript.openSession();
 			} else {
-				rawData = getWMIStub().listObject(wmiClass, this.namespace, this.computerName);
+				wmiStub = WMIPowerShell.openSession();
+			}
+		}
+
+		@Override
+		public void close() throws WMIException {
+			wmiStub.close();
+		}
+
+		/**
+		 * Query and list the WMI classes
+		 *
+		 * @see <a href=
+		 *      "https://msdn.microsoft.com/fr-fr/library/windows/desktop/aa394554(v=vs.85).aspx">WMI
+		 *      Classes - MSDN</a>
+		 * @return a list with the name of existing classes in the system
+		 */
+		public List<String> listClasses() throws WMIException {
+			List<String> wmiClasses = new ArrayList<>();
+			String rawData;
+			try {
+				rawData = wmiStub.listClasses(namespace, computerName);
+
+				String[] dataStringLines = rawData.split(NEWLINE_REGEX);
+
+				for (String line : dataStringLines) {
+					if (!line.isEmpty() && !line.startsWith("_")) {
+						String[] infos = line.split(SPACE_REGEX);
+						wmiClasses.addAll(Arrays.asList(infos));
+					}
+				}
+
+				// Normalize results: remove duplicates and sort the list
+				Set<String> hs = new HashSet<>(wmiClasses);
+				wmiClasses.clear();
+				wmiClasses.addAll(hs);
+
+			} catch (Exception ex) {
+				Logger.getLogger(WMI4Java.class.getName()).log(Level.SEVERE, GENERIC_ERROR_MSG, ex);
+				throw new WMIException(ex);
 			}
 
-			String[] dataStringObjects = rawData.split(NEWLINE_REGEX + NEWLINE_REGEX);
-			for (String dataStringObject : dataStringObjects) {
-				String[] dataStringLines = dataStringObject.split(NEWLINE_REGEX);
-				Map<String, String> objectProperties = new HashMap<String, String>();
+			return wmiClasses;
+		}
+
+		/**
+		 * Query a WMI class and return all the available properties
+		 *
+		 * @param wmiClass
+		 *            the WMI class to query
+		 * @return a list with the name of existing properties in the class
+		 */
+		public List<String> listProperties(String wmiClass) throws WMIException {
+			List<String> foundPropertiesList = new ArrayList<>();
+			try {
+				String rawData = wmiStub.listProperties(wmiClass, namespace, computerName);
+
+				String[] dataStringLines = rawData.split(NEWLINE_REGEX);
+
+				for (final String line : dataStringLines) {
+					if (!line.isEmpty()) {
+						foundPropertiesList.add(line.trim());
+					}
+				}
+
+				List<String> notAllowed = Arrays.asList("Equals", "GetHashCode", "GetType", "ToString");
+				foundPropertiesList.removeAll(notAllowed);
+
+			} catch (Exception ex) {
+				Logger.getLogger(WMI4Java.class.getName()).log(Level.SEVERE, GENERIC_ERROR_MSG, ex);
+				throw new WMIException(ex);
+			}
+			return foundPropertiesList;
+		}
+
+		/**
+		 * Query all the object data for a specific class <br>
+		 *
+		 * <b>WARNING</b> Notice that this method return a flat object. That means
+		 * that if you need to retrieve a list of objects it will not work as
+		 * expected. Every time it find an existing object key it overrides it.
+		 * <p>
+		 *
+		 * In order to retrieve a list of objects, use instead
+		 * {@link #getWMIObjectList(WMIClass)}
+		 *
+		 * @param wmiClass
+		 *            Enum that contains the most used classes (root/cimv2)
+		 * @return map with the key and the value of all the properties of the
+		 *         object
+		 */
+		public Map<String, String> getWMIObject(WMIClass wmiClass) {
+			return getWMIObject(wmiClass.getName());
+		}
+
+		/**
+		 * Query all the object data for a specific class <br>
+		 *
+		 * <b>WARNING</b> Notice that this method return a flat object. That means
+		 * that if you need to retrieve a list of objects it will not work as
+		 * expected. Every time it find an existing object key it overrides it.
+		 * <p>
+		 *
+		 * In order to retrieve a list of objects, use instead
+		 * {@link #getWMIObjectList(String)}
+		 *
+		 * @param wmiClass
+		 *            Enum that contains the most used classes (root/cimv2)
+		 * @return map with the key and the value of all the properties of the
+		 *         object
+		 */
+		public Map<String, String> getWMIObject(String wmiClass) throws WMIException {
+			Map<String, String> foundWMIClassProperties = new HashMap<>();
+			try {
+				String rawData;
+				if (properties != null || filters != null) {
+					rawData = wmiStub.queryObject(wmiClass, properties, filters, namespace, computerName);
+				} else {
+					rawData = wmiStub.listObject(wmiClass, namespace, computerName);
+				}
+
+				String[] dataStringLines = rawData.split(NEWLINE_REGEX);
+
 				for (final String line : dataStringLines) {
 					if (!line.isEmpty()) {
 						int p = line.indexOf(':');
@@ -350,52 +399,115 @@ public class WMI4Java {
 							String property = line.substring(0, p).trim();
 							String value = line.substring(p + 1).trim();
 							if (!property.isEmpty()) {
-								objectProperties.put(property, value);
+								foundWMIClassProperties.put(property, value);
 							}
 						}
 					}
 				}
-				foundWMIClassProperties.add(objectProperties);
+			} catch (WMIException ex) {
+				Logger.getLogger(WMI4Java.class.getName()).log(Level.SEVERE, GENERIC_ERROR_MSG, ex);
+				throw new WMIException(ex);
 			}
-		} catch (WMIException ex) {
-			Logger.getLogger(WMI4Java.class.getName()).log(Level.SEVERE, GENERIC_ERROR_MSG, ex);
-			throw new WMIException(ex);
-
+			return foundWMIClassProperties;
 		}
-		return foundWMIClassProperties;
-	}
 
-	/**
-	 * Query all the raw object data for an specific class
-	 *
-	 * @param wmiClass
-	 *            Enum that contains the most used classes (root/cimv2)
-	 * @return string with all the properties of the object
-	 */
-	public String getRawWMIObjectOutput(WMIClass wmiClass) {
-		return getRawWMIObjectOutput(wmiClass.getName());
-	}
+		/**
+		 * Query a list of object data for a specific class <br>
+		 *
+		 * This method should be used to retrieve a list of objects instead of a
+		 * flat key/value object. <br>
+		 * For example, you can use it to retrieve hardware elements information
+		 * (processors, printers, screens, etc)
+		 *
+		 * @param wmiClass
+		 *            Enum that contains the most used classes (root/cimv2)
+		 * @return List of key/value elements. Each element in the list is a found
+		 *         object
+		 */
+		public List<Map<String, String>> getWMIObjectList(WMIClass wmiClass) {
+			return getWMIObjectList(wmiClass.getName());
+		}
 
-	/**
-	 * Query all the raw object data for an specific class
-	 *
-	 * @param wmiClass
-	 *            string with the name of the class to query
-	 * @return string with all the properties of the object
-	 */
-	public String getRawWMIObjectOutput(String wmiClass) throws WMIException {
-		String rawData;
-		try {
-			if (this.properties != null || this.filters != null) {
-				rawData = getWMIStub().queryObject(wmiClass, this.properties, this.filters, this.namespace,
-						this.computerName);
-			} else {
-				rawData = getWMIStub().listObject(wmiClass, this.namespace, this.computerName);
+		/**
+		 * Query a list of object data for a specific class <br>
+		 *
+		 * This method should be used to retrieve a list of objects instead of a
+		 * flat key/value object. <br>
+		 * For example, you can use it to retrieve hardware elements information
+		 * (processors, printers, screens, etc)
+		 *
+		 * @param wmiClass
+		 *            Enum that contains the most used classes (root/cimv2)
+		 * @return List of key/value elements. Each element in the list is a found
+		 *         object
+		 */
+		public List<Map<String, String>> getWMIObjectList(String wmiClass) throws WMIException {
+			List<Map<String, String>> foundWMIClassProperties = new ArrayList<>();
+			try {
+				String rawData;
+				if (properties != null || filters != null) {
+					rawData = wmiStub.queryObject(wmiClass, properties, filters, namespace, computerName);
+				} else {
+					rawData = wmiStub.listObject(wmiClass, namespace, computerName);
+				}
+
+				String[] dataStringObjects = rawData.split(NEWLINE_REGEX + NEWLINE_REGEX);
+				for (String dataStringObject : dataStringObjects) {
+					String[] dataStringLines = dataStringObject.split(NEWLINE_REGEX);
+					Map<String, String> objectProperties = new HashMap<>();
+					for (final String line : dataStringLines) {
+						if (!line.isEmpty()) {
+							int p = line.indexOf(':');
+							if (p > 0) {
+								String property = line.substring(0, p).trim();
+								String value = line.substring(p + 1).trim();
+								if (!property.isEmpty()) {
+									objectProperties.put(property, value);
+								}
+							}
+						}
+					}
+					foundWMIClassProperties.add(objectProperties);
+				}
+			} catch (WMIException ex) {
+				Logger.getLogger(WMI4Java.class.getName()).log(Level.SEVERE, GENERIC_ERROR_MSG, ex);
+				throw new WMIException(ex);
+
 			}
-		} catch (WMIException ex) {
-			Logger.getLogger(WMI4Java.class.getName()).log(Level.SEVERE, GENERIC_ERROR_MSG, ex);
-			throw new WMIException(ex);
+			return foundWMIClassProperties;
 		}
-		return rawData;
+
+		/**
+		 * Query all the raw object data for a specific class
+		 *
+		 * @param wmiClass
+		 *            Enum that contains the most used classes (root/cimv2)
+		 * @return string with all the properties of the object
+		 */
+		public String getRawWMIObjectOutput(WMIClass wmiClass) {
+			return getRawWMIObjectOutput(wmiClass.getName());
+		}
+
+		/**
+		 * Query all the raw object data for a specific class
+		 *
+		 * @param wmiClass
+		 *            string with the name of the class to query
+		 * @return string with all the properties of the object
+		 */
+		public String getRawWMIObjectOutput(String wmiClass) throws WMIException {
+			String rawData;
+			try {
+				if (properties != null || filters != null) {
+					rawData = wmiStub.queryObject(wmiClass, properties, filters, namespace, computerName);
+				} else {
+					rawData = wmiStub.listObject(wmiClass, namespace, computerName);
+				}
+			} catch (WMIException ex) {
+				Logger.getLogger(WMI4Java.class.getName()).log(Level.SEVERE, GENERIC_ERROR_MSG, ex);
+				throw new WMIException(ex);
+			}
+			return rawData;
+		}
 	}
 }

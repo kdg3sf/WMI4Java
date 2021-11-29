@@ -37,6 +37,17 @@ class WMIVBScript implements WMIStub {
 
     private static final String CRLF = "\r\n";
 
+    private WMIVBScript() {}
+
+    static WMIStub openSession() {
+        return new WMIVBScript();
+    }
+
+    @Override
+    public void close() {
+        // This implementation is stateless. Nothing to close.
+    }
+
     private static String executeScript(String scriptCode) throws WMIException {
         String scriptResponse = "";
         File tmpFile = null;
